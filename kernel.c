@@ -4,6 +4,7 @@ void executeProgram(char*);
 void deleteFile(char*);
 void getDirectory();
 void handleInterrupt21(int, int, int, int);
+void handleTimerInterrupt(int, int);
 void printChar(char); 		
 void printString(char*);
 void readFile(char*,char*,int*);
@@ -141,6 +142,13 @@ void handleInterrupt21(int ax, int bx, int cx, int dx) {
 	} else {
 		printString("Error - Bad Interrupt");
 	}
+}
+
+void handleTimerInterrupt(int segment, int sp) {
+	printChar('T');
+	printChar('i');
+	printChar('c');
+	returnFromTimer(segment,sp);	
 }
 
 void printChar(char c){
