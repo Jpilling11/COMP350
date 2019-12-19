@@ -24,22 +24,24 @@ void main() {
 void deleteFile(char* name) {
 	char map[512];
 	char dir[512];
+	int sectors[27];
+	int sectorCount = 0;
 	int *sectorsRead = 0;
-	int e, j, k, x;
-
+	int e, i, j, k, x, index;
+	int sectNum;
+	int sector;
+	int found;
+	
 	readSector(map, 1);
 	readSector(dir, 2);
 
-	//move through sector
 	for(e = 0; e < 512; e = e + 32){
 		for (x = 0; x < 6; x++) {
-			//check name
 			if (name[x] != dir[e+x]) {
 				//fail
 				break;
-			} else if (x == 5) { //if name matches
+			} else if (x == 5) {
 				dir[e] = 0x0;
-				//set info in block to 0
 				for(j = 6; j < 32; j++) {
 					if(dir[e+j] != 0) {
 						k=dir[e+j];
@@ -48,7 +50,6 @@ void deleteFile(char* name) {
 						break;
 					}
 				}
-				//write blank info to sector then free space in the map
 				writeSector(dir,2);
 				writeSector(map,1);
 				break;
@@ -66,17 +67,15 @@ void executeProgram(char* name) {
 	int sectorsRead = 0;	
 	
 	readFile(name, buffer, &sectorsRead);
-	
-	//if successfully wrote to sector
+
 	if (sectorsRead>0) {
 		for(i = 0; i < 13312; i++) {
-			//load program into memory
 			putInMemory(segment, i, buffer[i]);
 		}
 	} else {
 		printString("No File Found");
 	}	
-	//run program from memory
+
 	launchProgram(segment);
 }
 
@@ -92,19 +91,19 @@ void getDirectory(){
 		dirBuff[i] = 0x0;
 	}
 
-	//Read dir
-    readSector(dirBuff, 2); 
+	/* Read in the directory sector */
+    	readSector(dirBuff, 2); 
 
-	//Look through the directory for files
+	/* Look through the directory for files */
 	for(i=0;i<16;i++){
-		 //check for file
+		 /* If there is a file at the location */
 		if (dirBuff[32*i] != 0x0){
-			//check if string matches
+			/* Check the first characters */
 			for (j=0; j < 6; j++){
 				buff[index] = dirBuff[j+32*i];
 				index++;
 			}
-			//line break
+			/* Add some formatting */
 			buff[index] = '\r';
 			index++;
 			buff[index] = '\n';
@@ -167,20 +166,17 @@ void readFile(char* name, char* buffer, int* sectorsRead) {
 	*sectorsRead = 0;
 
 	interrupt(0x21, 2, dir, 2, 0);
-	//move through sector
-	for(e = 0; e < 512; e = e + 32) {
-		//check name
+	for(e = 0; e < 512; e = e + 32){
 		for (x = 0; x < 6; x++) {
+			printChar(name[x]);
+			printChar(dir[e+x]);
 			if (name[x] != dir[e+x]) {
 				//fail
 				break;
-			} else if (x == 5) { //if name matches
+			} else if (x == 5) {
 				for(j = e + 6; dir[j] != 0; j++){
-					//increment sectors read
 					*sectorsRead = *sectorsRead + 1;
-					//read the sector into the buffer
 					interrupt(0x21, 2, buffer, dir[j], 0);
-					//increase the buffer for the next loop
 					buffer = buffer + 512;
 				}
 				return;
@@ -188,6 +184,7 @@ void readFile(char* name, char* buffer, int* sectorsRead) {
 		}
 	}
 	*sectorsRead = 0;
+	//printString("File Not Found!");
 }
 
 void readSector(char* buffer, int sector) {
@@ -198,23 +195,19 @@ void readString(char* letters) {
 	int x = 0;
 	while (letters[x] != 0xd) {
 		letters[x] = interrupt(0x16, 0, 0, 0, 0);
-		//backspace handling
 		if (letters[x] == 0x8 && x > 0) {
-			printChar(0x8);
-			printChar(' ');
-			printChar(0x8);
 			x--;
-		//enter handling
+			letters[x] = 0x20;
+			printChar(0x8);
 		} else if (letters[x] == 0xd) {
+			letters[x] = 0xa;
+			x++;
+			letters[x] = 0x0;
 			printChar(0xd);
 			printChar(0xa);
-			letters[x]=0xd;
-			x++;
-			letters[x]=0xa;
-			x++;
-			letters[x]=0x0;
+        		x++;
+		        letters[x] = 0x0;
 			return;
-		//write the char they typed
 		} else {
 			printChar(letters[x]);
 			x++;
@@ -237,28 +230,100 @@ void writeFile(char* buffer,char* file,int sectors){
 
 	char map[512];
 	char dir[512];
-	int i, j, k, address,sector;
+	int i,j,k,address,sector;
+
 
 	readSector(map,1);
 	readSector(dir,2);
-	//loop through dir
 	for(i=0;i<512;i+=32){
-		//look for empty space
+
 		if(dir[i]=='\0'){
-			//Write name to space
+
 			for(j=0;j<6;j++){
+
 				if(file[j]=='\0'){
+
+
 					for(k=0;k<(6-j);k++){
-						dir[i+j+k]='\0';
+
+					dir[i+j+k]='\0';
+
 					}
 					break;
+
 				}else{
+
 					dir[i+j]=file[j];
+
 				}
+
 			}
+
+			for(sector=3;sector<32;sector++){
+
+				if(map[sector]==0){
+
+					map[sector]=255;
+
+					break;
+				}
+
+
+			}
+			for(j=0;j<sectors+1;j++){
+
+				for(k=6;k<26;k++){
+
+					if(dir[i+k]==0){
+
+					dir[i+k]=sector;
+					break;
+
+					}
+
+				}
+				address=buffer+j*512;
+				writeSector(address,sector);
+				sector++;
+
+				if(map[sector]==255){
+
+					for(k=sector;k<32;k++){
+
+						if(map[k]==0){
+
+							sector=k;
+							break;
+
+						}
+
+					}
+
+
+				}
+				map[sector]=255;
+				if(j==sectors){
+
+					for(k=6+j;k<26-j;k++){
+
+						dir[i+k]='\0';
+
+					}
+
+				}
+
+
+
+			}
+
+
+			writeSector(map,1);
+			writeSector(dir,2);
+			break;
 
 		}
 	}
+
 }
 
 void writeSector(char* buffer, int sector) {
